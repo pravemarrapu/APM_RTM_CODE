@@ -18,7 +18,7 @@ import javax.xml.rpc.Stub
  
  Deployment Steps:
  a) Administration -> System -> Groovy Plug-ins
- b) Click on + (Add) button.
+ b) Click on + (Add).
  c) Add groovy name as APMTWebServiceUtil in short description	
  d) Paste the Groovy Code and click on Save.
  *
