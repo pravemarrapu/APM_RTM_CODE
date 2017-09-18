@@ -41,7 +41,6 @@ public class PANPreanErrorUtil extends AbstractExtensionCallback {
             preanValidationError.setFieldValue(CREATOR, _userContext.getUserId());
 
             HibernateApi.getInstance().save(preanValidationError);
-            HibernateApi.getInstance().flush();
             LOGGER.debug("Successfully persisted Prean Validation error for validation id :: "+inValidationRunId);
         }
         catch (Exception e) {
