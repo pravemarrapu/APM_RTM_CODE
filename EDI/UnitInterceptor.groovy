@@ -10,9 +10,11 @@ import com.navis.argo.business.api.IEventType
 import com.navis.argo.business.api.ServicesManager
 import com.navis.argo.business.atoms.*
 import com.navis.argo.business.model.CarrierVisit
+import com.navis.argo.business.reference.RoutingPoint
 import com.navis.external.framework.ECallingContext
 import com.navis.external.framework.entity.AbstractEntityLifecycleInterceptor
 import com.navis.external.framework.entity.EEntityView
+import com.navis.external.framework.util.EFieldChange
 import com.navis.external.framework.util.EFieldChanges
 import com.navis.external.framework.util.EFieldChangesView
 import com.navis.framework.business.Roastery
@@ -21,18 +23,22 @@ import com.navis.framework.metafields.MetafieldIdFactory
 import com.navis.framework.portal.FieldChange
 import com.navis.framework.portal.FieldChanges
 import com.navis.inventory.business.api.UnitField
+import com.navis.inventory.business.atoms.UfvTransitStateEnum
+import com.navis.inventory.business.units.Routing
 import com.navis.inventory.business.units.Unit
 import com.navis.inventory.business.units.UnitFacilityVisit
 import com.navis.orders.business.eqorders.Booking
+import com.navis.road.business.appointment.api.AppointmentFinder
+import com.navis.road.business.appointment.model.GateAppointment
 import com.navis.services.business.rules.EventType
 import com.navis.vessel.business.schedule.VesselVisitDetails
-import org.apache.log4j.Level
-import org.apache.log4j.Logger
 
 /*
  Modified by: Pradeep Arya
  WF#805275 - For some reason the interceptor didn't invoke on unit create therefore moved the
   code for updating the unitFlexString09 to new groovy RTMUpdateUnitDataSource
+  01-Sept-17 - Pradeep Arya - WF#888344 - RAIL/ITT Preannouncement change POD/POL
+  21-Sept-17 - Pradeep Arya - WF#888344 - added new dynamic flex field unitCustomDFFFormId to check who is updating the ITT-Loc(Routing or Prean)
  */
 
 public class UnitInterceptor extends AbstractEntityLifecycleInterceptor {
@@ -52,6 +58,7 @@ public class UnitInterceptor extends AbstractEntityLifecycleInterceptor {
       private static MetafieldId CREATED_BY_PROCESS = UnitField.UNIT_FLEX_STRING09;*/
 
     public void onUpdate(EEntityView inEntity, EFieldChangesView inOriginalFieldChanges, EFieldChanges inMoreFieldChanges) {
+
         Unit unit = (Unit) inEntity._entity;
 
         processOrphan(inOriginalFieldChanges, inMoreFieldChanges, unit);
@@ -102,16 +109,48 @@ public class UnitInterceptor extends AbstractEntityLifecycleInterceptor {
     private void recordUnitRerouteByPreanEvent(EFieldChangesView inOriginalFieldChanges, Unit unit) {
 
         log("recordUnitRerouteByPreanEvent", "Start");
+        //Pradeep Arya - WF#888344 - RAIL/ITT Preannouncement change POD/POL
+        log("inOriginalFieldChanges:$inOriginalFieldChanges");
+        //added this new dynamic flex field to check who is updating the ITT-Loc(Routing vs Prean)
+        String formId = unit.getFieldValue(MetafieldIdFactory.valueOf("customFlexFields.unitCustomDFFFormId"));
+        log("FormId:" + formId);
+        if(inOriginalFieldChanges.hasFieldChange(UnitField.UNIT_FLEX_STRING04) && formId == "APT_FORM_GATE_APPOINTMENT") {
 
-        if (isPreanProcessedTimeChanged(inOriginalFieldChanges)) {
-
-            if (inOriginalFieldChanges.hasFieldChange(UnitField.UNIT_ROUTING)) {
-
-                FieldChanges fcs = new FieldChanges();
-                fcs.setFieldChange(inOriginalFieldChanges.findFieldChange(UnitField.UNIT_ROUTING));
-                unit.recordUnitEvent(EventEnum.UNIT_REROUTE, fcs, REROUTED_BY_PREAN);
+            String newITTLoc = inOriginalFieldChanges.findFieldChange(UnitField.UNIT_FLEX_STRING04).getNewValue();
+            log("ITT Loc: " + newITTLoc);
+            Routing rtg = unit.getUnitRouting();
+            RoutingPoint rtgPoint = RoutingPoint.findRoutingPoint(newITTLoc);
+            FieldChanges fc = new FieldChanges();
+            fc.setFieldChange(UnitField.UNIT_FLEX_STRING04, newITTLoc);
+            //for all inbound POL should be updated
+            if (unit.getUnitActiveUfv() && unit.getUnitActiveUfv().getUfvTransitState() == UfvTransitStateEnum.S20_INBOUND && rtgPoint) {
+                rtg.setRtgPOL(rtgPoint);
+                fc.setFieldChange(UnitField.UNIT_RTG_POL, rtgPoint.getPointGkey());
+                unit.recordUnitEvent(EventEnum.UNIT_REROUTE, fc, REROUTED_BY_PREAN);
+                //for all outbound POD should be updated
+            } else if (unit.getUnitActiveUfv() && unit.getUnitActiveUfv().getUfvTransitState() == UfvTransitStateEnum.S40_YARD && rtgPoint) {
+                rtg.setRtgPOD1(rtgPoint);
+                fc.setFieldChange(UnitField.UNIT_RTG_POD1, rtgPoint.getPointGkey());
+                unit.recordUnitEvent(EventEnum.UNIT_REROUTE, fc, REROUTED_BY_PREAN);
             }
+            unit.setFieldValue(MetafieldIdFactory.valueOf("customFlexFields.unitCustomDFFFormId"), "");
         }
+        //Pradeep Arya - WF#888344  - commented out this code creating loop of UNIT_ROUTING events
+        /*else if (isPreanProcessedTimeChanged(inOriginalFieldChanges)) {
+          if(inOriginalFieldChanges.hasFieldChange(UnitField.UNIT_ROUTING)) {
+            EFieldChange efc = inOriginalFieldChanges.findFieldChange(MetafieldIdFactory.valueOf("unitRouting"));
+            Routing newVal = efc ? efc.getNewValue() : null;
+            Routing oldVal = efc ? efc.getPriorValue() : null;
+            log("OldValRtg:$oldVal + newValRtg:$newVal");
+            if (newVal && oldVal && (newVal.getRtgPOD1() != oldVal.getRtgPOD1() || newVal.getRtgPOL() != oldVal.getRtgPOL())) {
+              FieldChanges fcs = new FieldChanges();
+              fcs.setFieldChange(efc);
+              unit.recordUnitEvent(EventEnum.UNIT_REROUTE, fcs, REROUTED_BY_PREAN);
+            }
+          }
+        }*/
+
+
         log("recordUnitRerouteByPreanEvent", "End");
     }
 
@@ -254,4 +293,5 @@ public class UnitInterceptor extends AbstractEntityLifecycleInterceptor {
     private static String REROUTED_BY_PREAN = "Re-routed by prean";
 
     private static ServicesManager _srvcMgr = (ServicesManager) Roastery.getBean(ServicesManager.BEAN_ID);
+
 }
