@@ -174,8 +174,11 @@ import com.navis.road.util.appointment.AppointmentIdProvider
  Date 06/09/2017 APMT #24 and #32 - Logic to update the prean eqo number and order number for RAIL_ITT gate transactions.
  Author: Gopinath Kannappan
  Date 07/09/2017 APMT #34 - OOG is not updating from Booking to Unit, hence updated the OOG information to Unit from booking.
- Modified By: Praveen Babu
- Date 11/09/2017 APMT #25 - Update the right validation run id to Prean.
+ Modified By: Pradeep Arya
+ 13-Sept-17 WF#893705 - added validation for ediFlexField to fix the null pointer exception
+ Modified By: Pradeep Arya
+ 18-Sept-17 WF#892222 -  added RM check to donot attach the order item here, it will be assigned by the prean gate process
+
 
  */
 
@@ -1013,7 +1016,7 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
             LOGGER.debug("Order number Key :: " + inParams.get(EDI_ORDER_KEY))
             LOGGER.debug("Appt State :: " + inPostedPrean.getGapptState())
             LOGGER.debug("ORDER EQOI mismatch :: " + inParams.get(ORDER_MISMATCH_EQOI));
-            LOGGER.debug("Validation ID :: " + inParams.get(VALIDATION_RUN_ID_KEY));
+
 
             /* if(inParams.get(EDI_ORDER_NBR_KEY) != null){
                  inPostedPrean.setFieldValue(PREAN_EQO_NBR, (String) inParams.get(EDI_ORDER_NBR_KEY));
@@ -1153,7 +1156,8 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
                 }
                 LOGGER.debug("Before set the booking to unit EQ NBR :: " + inPostedPrean.getField(MetafieldIdFactory.valueOf("gapptOrder.eqboNbr")));
                 LOGGER.debug("Before set the booking to unit Base Order :: " + inPostedPrean.getGapptOrder());
-                if (inPostedPrean.getGapptOrder() != null) {
+                //WF#892222 -  added RM check to donot attach the order item here, it will be assigned by the prean gate process
+                if (inPostedPrean.getGapptOrder() != null && inPostedPrean.getTranSubTypeEnum() != TranSubTypeEnum.RM) {
                     for (EqBaseOrderItem eqBaseOrderItem : inPostedPrean.getGapptOrder().getEqboOrderItems()) {
                         LOGGER.debug("Equipment Order Item ISO :: " + EquipmentOrderItem.resolveEqoiFromEqboi(eqBaseOrderItem).getEqoiSampleEquipType() + "VS Prean :: " + inPostedPrean.getGapptCtrEquipType())
 
@@ -1176,7 +1180,8 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
                 }
 
                 log("Current value for the prean Unit UFV flex String 07 RTO Category :: " + preanUnit.getUnitActiveUfvNowActive().getUfvFlexString07())
-                if (preanUnit.getUnitActiveUfvNowActive().getUfvFlexString07() != null) {
+                //WF#893705 - added validation for ediFlexField to fix the null pointer exception
+                if (preanUnit.getUnitActiveUfvNowActive().getUfvFlexString07() != null && apptTran.getEdiFlexFields()) {
                     apptTran.getEdiFlexFields().setUfvFlexString07(preanUnit.getUnitActiveUfvNowActive().getUfvFlexString07());
                 }
                 HibernateApi.getInstance().save(preanUnit);
@@ -1212,15 +1217,15 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
 
             inPostedPrean.setFieldValue(EDI_TRAN_GKEY, inParams.get(EdiConsts.TRANSACTION_GKEY));
 
-            //Praveen Babu - WF#892222 Logic of setting the validation run id is not required.
-            /*if (inParams.get(VALIDATION_RUN_ID_KEY) != null && inPostedPrean.getFieldValue(PREAN_VALIDATION_RUN_ID) != null) {
-                Long paramValidationID = inParams.get(VALIDATION_RUN_ID_KEY);
-                Long preanValidationID = inPostedPrean.getFieldValue(PREAN_VALIDATION_RUN_ID);
-                if (paramValidationID.compareTo(preanValidationID) != 0) {
-                    LOGGER.debug("Updating the validation run id");
-                    inPostedPrean.setFieldValue(PREAN_VALIDATION_RUN_ID, paramValidationID);
-                }
-            }*/
+
+
+
+
+
+
+
+
+
 
             EdiSession ediSession = (EdiSession) HibernateApi.getInstance().load(EdiSession.class, (Long) inParams.get(EdiConsts.SESSION_GKEY));
             inPostedPrean.setFieldValue(EDI_PARTNER_NAME, ediSession.getEdisessTradingPartner().getNaturalKey());
@@ -2518,7 +2523,7 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
     private static String EDI_ORDER_NBR_KEY = "EDI_ORDER_NBR_KEY";
     private static String EDI_ORDER_KEY = "EDI_ORDER_KEY";
     private static String ORDER_MISMATCH_EQOI = "ORDER_MISMATCH_EQOI";
-    public static String VALIDATION_RUN_ID_KEY = "validationRunId";
+
     private static String CAN_BE_RETIRED_PREAN = "CAN_BE_RETIRED_PREAN";
 
     private static String EDI_ORIGINAL_REQUESTED_DATETIME_KEY = "EDI_ORIGINAL_REQUESTED_DATETIME_KEY";
@@ -2531,6 +2536,7 @@ public class PANApptPostInterceptor extends AbstractEdiPostInterceptor {
     private static String RAIL_ITT_GATE = "RAIL_ITT";
     private static String RAIL_CARRIER_QUALIFIER = "2-26";
     private static String TRANSHIP_CARRIER_QUALIFIER = "1-27";
+
 
     private
     static List<String> TRANSHIP_QUALIFIER_CODES = new ArrayList<String>(Arrays.asList("DDE", "DDN", "DDW", "DMU", "DBF"));
