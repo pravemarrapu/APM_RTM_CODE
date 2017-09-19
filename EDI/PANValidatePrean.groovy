@@ -51,6 +51,9 @@ import com.navis.framework.portal.query.PredicateIntf;
  * 20-06-17 : weserve team - Update Unit's routing details with prean's
  * 23-08-17 : weserve team - Update Prean's typeISO with Unit's typeISO
  *
+ *  Modified By: Praveen Babu
+ *  Date 19/09/2017 APMT #25 - Restrict the execution of this groovy for Units that are created by Prean Via RAIL_ITT gate.
+ *
  */
 
 
@@ -60,14 +63,15 @@ public class PANValidatePrean extends GroovyInjectionBase {
         Event evnt = inGroovyEvent.getEvent();
         Serializable unitPk = evnt.getEventAppliedToGkey();
         Unit unit = (Unit) HibernateApi.getInstance().load(Unit.class, unitPk);
-        if (!(EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
-                && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN)))) {
-            List<GateAppointment> unitApptList = findOpenGateAppointmentsByUnit(unit);
-            if (unitApptList.size() == 0) {
-                unitApptList = findPickupPreansByContainerIdAndFreightKind(unit.getUnitId(), unit.getUnitFreightKind());
-            }
-            for (GateAppointment appt : unitApptList) {
-                try {
+        List<GateAppointment> unitApptList = findOpenGateAppointmentsByUnit(unit);
+        if (unitApptList.size() == 0) {
+            unitApptList = findPickupPreansByContainerIdAndFreightKind(unit.getUnitId(), unit.getUnitFreightKind());
+        }
+        for (GateAppointment appt : unitApptList) {
+            try {
+                if (!(appt.getGapptGate() != null && RAIL_ITT_GATE.equalsIgnoreCase(appt.getGapptGate().getGateId())
+                        && EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
+                        && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN)))) {
                     updatePreanRtgDetailsToUnit(appt, unit);
 
                     //weserve team - Update Prean's typeISO with Unit's typeISO
@@ -80,12 +84,10 @@ public class PANValidatePrean extends GroovyInjectionBase {
                     extensionData.add(0, evnt.getEventTypeId());
 
                     appt.submit(GateClientTypeEnum.CLERK, extensionData);
-
-                } catch (BizViolation bv) {
-                    //@todo - Revisit
-                    log(Level.ERROR, bv.getMessage());
                 }
-
+            } catch (BizViolation bv) {
+                //@todo - Revisit
+                log(Level.ERROR, bv.getMessage());
             }
         }
     }
@@ -182,4 +184,5 @@ public class PANValidatePrean extends GroovyInjectionBase {
     private static String STATUS_UPDATE = "STATUS_UPDATE";
     private static MetafieldId CAN_BE_DELETED_BY_PREAN = UnitField.UNIT_FLEX_STRING02;
     private static String YES = "YES";
+    private static String RAIL_ITT_GATE = "RAIL_ITT";
 }
