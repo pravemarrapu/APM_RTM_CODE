@@ -5,11 +5,12 @@
  */
 
 
+package apmt.edi
 
-package apmt.edi;
-
+import com.navis.argo.business.atoms.EventEnum
+import com.navis.framework.metafields.MetafieldId
+import com.navis.inventory.business.api.UnitField;
 import org.apache.log4j.Level;
-
 
 
 import com.navis.apex.business.model.GroovyInjectionBase;
@@ -58,34 +59,35 @@ public class PANValidatePrean extends GroovyInjectionBase {
     public void execute(GroovyEvent inGroovyEvent) {
         Event evnt = inGroovyEvent.getEvent();
         Serializable unitPk = evnt.getEventAppliedToGkey();
-        Unit unit = (Unit)HibernateApi.getInstance().load(Unit.class, unitPk);
-        List<GateAppointment> unitApptList = findOpenGateAppointmentsByUnit(unit);
-        if (unitApptList.size() == 0) {
-            unitApptList = findPickupPreansByContainerIdAndFreightKind(unit.getUnitId(),unit.getUnitFreightKind());
-        }
-
-        for(GateAppointment appt : unitApptList){
-            try {
-                updatePreanRtgDetailsToUnit(appt, unit);
-
-                //weserve team - Update Prean's typeISO with Unit's typeISO
-                updatePreanWithUnitIsoType(appt, unit);
-
-                appt.setGapptOrderNbr((appt.getFieldString(_panFields.PREAN_EQO_NBR)));
-                appt.setPinNumber(appt.getFieldString(_panFields.PREAN_PIN));
-
-                List<String> extensionData = new ArrayList<String>();
-                extensionData.add(0,evnt.getEventTypeId());
-
-                appt.submit(GateClientTypeEnum.CLERK, extensionData);
-
-            } catch(BizViolation bv) {
-                //@todo - Revisit
-                log(Level.ERROR, bv.getMessage());
+        Unit unit = (Unit) HibernateApi.getInstance().load(Unit.class, unitPk);
+        if (!(EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
+                && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN)))) {
+            List<GateAppointment> unitApptList = findOpenGateAppointmentsByUnit(unit);
+            if (unitApptList.size() == 0) {
+                unitApptList = findPickupPreansByContainerIdAndFreightKind(unit.getUnitId(), unit.getUnitFreightKind());
             }
+            for (GateAppointment appt : unitApptList) {
+                try {
+                    updatePreanRtgDetailsToUnit(appt, unit);
 
+                    //weserve team - Update Prean's typeISO with Unit's typeISO
+                    updatePreanWithUnitIsoType(appt, unit);
+
+                    appt.setGapptOrderNbr((appt.getFieldString(_panFields.PREAN_EQO_NBR)));
+                    appt.setPinNumber(appt.getFieldString(_panFields.PREAN_PIN));
+
+                    List<String> extensionData = new ArrayList<String>();
+                    extensionData.add(0, evnt.getEventTypeId());
+
+                    appt.submit(GateClientTypeEnum.CLERK, extensionData);
+
+                } catch (BizViolation bv) {
+                    //@todo - Revisit
+                    log(Level.ERROR, bv.getMessage());
+                }
+
+            }
         }
-
     }
 
     public List findOpenGateAppointmentsByUnit(Unit inUnit) {
@@ -108,9 +110,9 @@ public class PANValidatePrean extends GroovyInjectionBase {
 
         DomainQuery dq = QueryUtils.createDomainQuery(RoadApptsEntity.GATE_APPOINTMENT)
                 .addDqPredicate(PredicateFactory.eq(RoadApptsField.GAPPT_CTR_ID, inCtrId))
-                .addDqPredicate(PredicateFactory.in(RoadApptsField.GAPPT_TRAN_TYPE, [TruckerFriendlyTranSubTypeEnum.PUI,TruckerFriendlyTranSubTypeEnum.PUM]))
+                .addDqPredicate(PredicateFactory.in(RoadApptsField.GAPPT_TRAN_TYPE, [TruckerFriendlyTranSubTypeEnum.PUI, TruckerFriendlyTranSubTypeEnum.PUM]))
                 .addDqPredicate(PredicateFactory.isNull(RoadApptsField.GAPPT_UNIT))
-                .addDqPredicate(PredicateFactory.eq(RoadApptsField.GAPPT_FREIGHT_KIND,inFreightKind.getKey()))
+                .addDqPredicate(PredicateFactory.eq(RoadApptsField.GAPPT_FREIGHT_KIND, inFreightKind.getKey()))
                 .addDqPredicate(PredicateFactory.eq(RoadApptsField.GAPPT_STATE, AppointmentStateEnum.CREATED));
 
         PredicateIntf criterion = constructRspMsgTypeCriterion();
@@ -141,7 +143,7 @@ public class PANValidatePrean extends GroovyInjectionBase {
 
         boolean multipleAperaksSent = false;
 
-        GeneralReference genRef = GeneralReference.findUniqueEntryById("NON_STD_APERAK_OUT","COPINO_13","MULTIPLE_APERAKS");
+        GeneralReference genRef = GeneralReference.findUniqueEntryById("NON_STD_APERAK_OUT", "COPINO_13", "MULTIPLE_APERAKS");
         multipleAperaksSent = genRef != null && "YES".equals(genRef.getRefValue1());
         if (!multipleAperaksSent) {
             log("GeneralReference record NON_STD_APERAK_OUT/COPINO_13/MULTIPLE_APERAKS does not exist")
@@ -155,11 +157,11 @@ public class PANValidatePrean extends GroovyInjectionBase {
      * @param unit
      */
     private void updatePreanRtgDetailsToUnit(GateAppointment appt, Unit unit) {
-        if( AppointmentStateEnum.CREATED.equals(appt.getApptState()) && unit.getUnitRouting()!=null) {
-            if(appt.getGapptPol() != null) {
+        if (AppointmentStateEnum.CREATED.equals(appt.getApptState()) && unit.getUnitRouting() != null) {
+            if (appt.getGapptPol() != null) {
                 unit.getUnitRouting().setRtgPOL(appt.getGapptPol());
             }
-            if(appt.getGapptPod1() != null) {
+            if (appt.getGapptPod1() != null) {
                 unit.getUnitRouting().setRtgPOD1(appt.getGapptPod1());
             }
         }
@@ -171,11 +173,13 @@ public class PANValidatePrean extends GroovyInjectionBase {
      * @param unit
      */
     private void updatePreanWithUnitIsoType(GateAppointment appt, Unit unit) {
-        if( AppointmentStateEnum.CREATED.equals(appt.getApptState()) && unit.getUnitEquipment() != null) {
+        if (AppointmentStateEnum.CREATED.equals(appt.getApptState()) && unit.getUnitEquipment() != null) {
             appt.setGapptCtrEquipType(unit.getUnitEquipment().getEqEquipType());
         }
     }
 
     private static def _panFields = ExtensionUtils.getLibrary(ContextHelper.getThreadUserContext(), "PANFields");
     private static String STATUS_UPDATE = "STATUS_UPDATE";
+    private static MetafieldId CAN_BE_DELETED_BY_PREAN = UnitField.UNIT_FLEX_STRING02;
+    private static String YES = "YES";
 }
