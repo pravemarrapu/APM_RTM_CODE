@@ -54,6 +54,9 @@ import com.navis.framework.portal.query.PredicateIntf;
  *  Modified By: Praveen Babu
  *  Date 19/09/2017 APMT #25 - Restrict the execution of this groovy for Units that are created by Prean Via RAIL_ITT gate.
  *
+ *  *  Modified By: Praveen Babu
+ *  Date 19/09/2017 APMT #25 - Use the logic for all prean.
+ *
  */
 
 
@@ -69,8 +72,8 @@ public class PANValidatePrean extends GroovyInjectionBase {
         }
         for (GateAppointment appt : unitApptList) {
             try {
-                if (!(appt.getGapptGate() != null && RAIL_ITT_GATE.equalsIgnoreCase(appt.getGapptGate().getGateId())
-                        && EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
+                if (!(/*appt.getGapptGate() != null && RAIL_ITT_GATE.equalsIgnoreCase(appt.getGapptGate().getGateId())
+                        &&*/ EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
                         && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN)))) {
                     updatePreanRtgDetailsToUnit(appt, unit);
 

@@ -23,8 +23,12 @@
  *
  * 11/Feb/2015 CSDV-2731 added setNokCancelDelay functionality
  * Modified By: Praveen Babu
- Date 11/09/2017 APMT #25 - Update the right validation run id to Prean.
- Modified By - Pradeep Arya 08-Sept-17 WF#892222 commented out code throwing null pointer exception
+ * Date 11/09/2017 APMT #25 - Update the right validation run id to Prean.
+ * Modified By - Pradeep Arya 08-Sept-17 WF#892222 commented out code throwing null pointer exception
+ * Modified By: Praveen Babu
+ * Date 19/09/2017 APMT #25 - Fetch the previous validation ids and compare for new ids matching to sent the send_msg flag as true.
+ * Modified By: Praveen Babu
+ * Date 20/09/2017 APMT #25 - Additional logging.
  */
 
 import org.apache.commons.lang.StringUtils
@@ -238,15 +242,8 @@ public class PANGateWorkflowHelper extends AbstractExtensionCallback {
 				log("newPreanStatus:$newPreanStatus");
 
 				String currErrorAperakCodes = _preanErrorUtil.getErrRefAperakCodesByPreanAndValidationRunId(prean.getGapptGkey(),inWfCtx.get(VALIDATION_RUN_ID_KEY));
-				/*boolean differentErrorsRecorded;
-                if(prean.getGapptGate() != null && RAIL_ITT_GATE.equalsIgnoreCase(prean.getGapptGate().getGateId())){
-                    differentErrorsRecorded =  false;
-                }else{
-                    differentErrorsRecorded =  _preanErrorUtil.diffErrorsRecorded(prean.getGapptGkey(), inWfCtx.get(VALIDATION_RUN_ID_KEY),currErrorAperakCodes);
-                }*/
-				log("Post work flow :: Gate information :: "+prean.getGapptGate())
-				boolean differentErrorsRecorded =  false;
-
+				boolean differentErrorsRecorded =  _preanErrorUtil.diffErrorsRecorded(prean.getGapptGkey(), inWfCtx.get(VALIDATION_RUN_ID_KEY),currErrorAperakCodes);
+				log("Post work flow:: Gate:: "+prean.getGapptGate()+" Validation ID:: "+inWfCtx.get(VALIDATION_RUN_ID_KEY)+" currErrorAperak Codes:: $currErrorAperakCodes"+" Different errors recorded :: $differentErrorsRecorded")
 				//send a message if validation was initiated by a COPINO process, or status has changed or different errors have been recorded
 				if (GateClientTypeEnum.EDI.equals(inWfCtx.getGateClientType()) || !newPreanStatus.equals(oldPreanStatus) || (newPreanStatus.equals("NOK") && differentErrorsRecorded)) {
 					prean.setFieldValue(_panFields.SEND_MSG, "YES");
