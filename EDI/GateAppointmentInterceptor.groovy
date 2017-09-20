@@ -7,9 +7,12 @@
 
 package com.navis.apex.groovy.mv2_rwg;
 
-import com.navis.argo.ContextHelper;
+import com.navis.argo.ContextHelper
+import com.navis.argo.business.api.ArgoUtils
+import com.navis.argo.business.atoms.EventEnum;
 import com.navis.argo.business.atoms.FreightKindEnum;
-import com.navis.argo.business.model.CarrierVisit;
+import com.navis.argo.business.model.CarrierVisit
+import com.navis.argo.business.reference.RoutingPoint;
 import com.navis.external.framework.entity.AbstractEntityLifecycleInterceptor;
 import com.navis.external.framework.entity.EEntityView;
 import com.navis.external.framework.util.EFieldChanges;
@@ -20,12 +23,14 @@ import com.navis.framework.metafields.MetafieldId;
 import com.navis.framework.metafields.MetafieldIdFactory;
 import com.navis.framework.persistence.Entity;
 import com.navis.framework.persistence.HibernateApi;
-import com.navis.framework.portal.FieldChange;
+import com.navis.framework.portal.FieldChange
+import com.navis.framework.portal.FieldChanges;
 import com.navis.framework.portal.QueryUtils;
 import com.navis.framework.portal.query.DomainQuery;
 import com.navis.framework.portal.query.PredicateFactory;
 import com.navis.framework.util.BizViolation
-import com.navis.inventory.business.units.EqBaseOrder;
+import com.navis.inventory.business.units.EqBaseOrder
+import com.navis.inventory.business.units.Routing;
 import com.navis.inventory.business.units.Unit;
 import com.navis.inventory.business.units.UnitFacilityVisit
 import com.navis.orders.business.eqorders.Booking
@@ -52,6 +57,8 @@ WF#777643 22-Mar-17 - Added 300000000 to ApptNbr to avoid duplicate error for RA
 Modified By: Praveen Babu
 Date 06/09/2017 APMT #24 and #32 - Logic to update the prean eqo number and order number for RAIL_ITT gate transactions.
 Modified By: Pradeep Arya - 08-Sept-17 WF#892222 added null check for booking
+Modified By: Praveen Babu: Date 20/09/2017 APMT #32 - Re-assign the prean eqo nbr when the unit is retired and re-assigned to prean
+
  */
 
 public class GateAppointmentInterceptor extends AbstractEntityLifecycleInterceptor {
@@ -174,6 +181,28 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
             }
 
         }
+        //added by Pradeep Arya
+        //WF#896862 - set field 'can be retired by prean' to YES after the post
+        if(unitFc != null) {
+            Unit unit = (Unit) unitFc.getNewValue();
+
+            if(unit) {
+                boolean wasNewlyCreatedUnit = wasUnitJustCreatedByPrean(unit);
+                log("wasNewlyCreatedUnit:$wasNewlyCreatedUnit");
+                if (wasNewlyCreatedUnit) {
+                    inMoreFieldChanges.setFieldChange(RoadApptsField.GAPPT_UNIT_FLEX_STRING02, "YES");
+                    //prean.setGapptUnitFlexString02("YES");
+                }
+                //Logic to compare the unit booking and prean booking number vs prean eqo nbr
+                if(unit.getDepartureOrder()!= null && prean.getGapptOrder() != null){
+                    if(unit.getDepartureOrder().getEqboNbr().equalsIgnoreCase(prean.getGapptOrder().getEqboNbr())
+                            && !prean.getGapptOrder().getEqboNbr().equalsIgnoreCase(prean.getFieldString(_panFields.PREAN_EQO_NBR))){
+                        inMoreFieldChanges.setFieldChange(_panFields.PREAN_EQO_NBR, prean.getGapptOrder().getEqboNbr())
+                        inMoreFieldChanges.setFieldChange(RoadApptsField.GAPPT_NOTES, "REVALIDATE")
+                    }
+                }
+            }
+        }
 
         FieldChange tvaFc = (FieldChange) inOriginalFieldChanges.findFieldChange(RoadApptsField.GAPPT_TRUCK_VISIT_APPOINTMENT);
         if (tvaFc != null && tvaFc.getNewValue() == null) {
@@ -268,6 +297,20 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
         log(stackTraceText);
 
     }
+
+    public boolean wasUnitJustCreatedByPrean(Unit unit) {
+
+        boolean wasCreated = false;
+
+        Date unitCreated = (unit == null) ? null : unit.getUnitCreateTime();
+        Date currentTime = ArgoUtils.timeNow();
+        if (unitCreated != null) {
+            long diffMillis = Math.abs(unitCreated.getTime() - currentTime.getTime());
+            wasCreated = diffMillis < 10000; // 10 seconds
+        }
+        return wasCreated;
+    }
+
 
     private static String PREAN_VALIDATION_ERROR = "com.navis.external.custom.CustomPreanValidationError";
     public static MetafieldId PREAN_KEY = MetafieldIdFactory.valueOf("customEntityFields.custompaverrPreanKey");

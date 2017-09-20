@@ -241,6 +241,7 @@ public class PANGateWorkflowHelper extends AbstractExtensionCallback {
 				log("oldPreanStatus:$oldPreanStatus");
 				log("newPreanStatus:$newPreanStatus");
 
+				log("Post work flow:: Gate:: ");
 				String currErrorAperakCodes = _preanErrorUtil.getErrRefAperakCodesByPreanAndValidationRunId(prean.getGapptGkey(),inWfCtx.get(VALIDATION_RUN_ID_KEY));
 				boolean differentErrorsRecorded =  _preanErrorUtil.diffErrorsRecorded(prean.getGapptGkey(), inWfCtx.get(VALIDATION_RUN_ID_KEY),currErrorAperakCodes);
 				log("Post work flow:: Gate:: "+prean.getGapptGate()+" Validation ID:: "+inWfCtx.get(VALIDATION_RUN_ID_KEY)+" currErrorAperak Codes:: $currErrorAperakCodes"+" Different errors recorded :: $differentErrorsRecorded")

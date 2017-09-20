@@ -56,6 +56,8 @@ import com.navis.framework.portal.query.PredicateIntf;
  *
  *  *  Modified By: Praveen Babu
  *  Date 19/09/2017 APMT #25 - Use the logic for all prean.
+ *  Modified By: Praveen Babu
+ *  Date 20/09/2017 APMT #32 - Consider revalidation in case of the unit retired and re-assigned to prean
  *
  */
 
@@ -74,19 +76,23 @@ public class PANValidatePrean extends GroovyInjectionBase {
             try {
                 if (!(/*appt.getGapptGate() != null && RAIL_ITT_GATE.equalsIgnoreCase(appt.getGapptGate().getGateId())
                         &&*/ EventEnum.UNIT_CREATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) || EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId())
-                        && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN)))) {
-                    updatePreanRtgDetailsToUnit(appt, unit);
+                        && YES.equals(unit.getFieldString(CAN_BE_DELETED_BY_PREAN) && appt.getGapptNotes() == null))) {
+                    if(EventEnum.UNIT_ACTIVATE.getId().equalsIgnoreCase(evnt.getEventTypeId()) && appt.getGapptNotes() != null && appt.getGapptNotes().equalsIgnoreCase("REVALIDATE")){
+                        updatePreanRtgDetailsToUnit(appt, unit);
 
-                    //weserve team - Update Prean's typeISO with Unit's typeISO
-                    updatePreanWithUnitIsoType(appt, unit);
+                        //weserve team - Update Prean's typeISO with Unit's typeISO
+                        updatePreanWithUnitIsoType(appt, unit);
 
-                    appt.setGapptOrderNbr((appt.getFieldString(_panFields.PREAN_EQO_NBR)));
-                    appt.setPinNumber(appt.getFieldString(_panFields.PREAN_PIN));
+                        appt.setGapptOrderNbr((appt.getFieldString(_panFields.PREAN_EQO_NBR)));
+                        appt.setPinNumber(appt.getFieldString(_panFields.PREAN_PIN));
 
-                    List<String> extensionData = new ArrayList<String>();
-                    extensionData.add(0, evnt.getEventTypeId());
+                        List<String> extensionData = new ArrayList<String>();
+                        extensionData.add(0, evnt.getEventTypeId());
 
-                    appt.submit(GateClientTypeEnum.CLERK, extensionData);
+                        appt.setGapptNotes(null)
+                        appt.submit(GateClientTypeEnum.CLERK, extensionData);
+                    }
+
                 }
             } catch (BizViolation bv) {
                 //@todo - Revisit
