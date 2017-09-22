@@ -57,7 +57,9 @@ WF#777643 22-Mar-17 - Added 300000000 to ApptNbr to avoid duplicate error for RA
 Modified By: Praveen Babu
 Date 06/09/2017 APMT #24 and #32 - Logic to update the prean eqo number and order number for RAIL_ITT gate transactions.
 Modified By: Pradeep Arya - 08-Sept-17 WF#892222 added null check for booking
+19-Sept-17 Pradeep Arya - WF#896862 - set field 'can be retired by prean' to YES so that it can be retired on Cancel
 Modified By: Praveen Babu: Date 20/09/2017 APMT #32 - Re-assign the prean eqo nbr when the unit is retired and re-assigned to prean
+Modified By: Praveen Babu: Date 20/09/2017 APMT #32 - Implement the fix for other gates.
 
  */
 
@@ -130,7 +132,7 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
     public void onUpdate(EEntityView inEntity, EFieldChangesView inOriginalFieldChanges, EFieldChanges inMoreFieldChanges) {
 
         LOGGER.setLevel(Level.DEBUG);
-        LOGGER.debug("oRIGINAL Filed Changes:: "+inOriginalFieldChanges)
+        LOGGER.debug("oRIGINAL Filed Changes:: " + inOriginalFieldChanges)
         GateAppointment prean = inEntity._entity;
 
         if (("BARGE".equals(prean.getGate().getGateId()) || "RAIL".equals(prean.getGate().getGateId())) && ContextHelper.getThreadEdiPostingContext() == null) {
@@ -183,10 +185,10 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
         }
         //added by Pradeep Arya
         //WF#896862 - set field 'can be retired by prean' to YES after the post
-        if(unitFc != null) {
+        if (unitFc != null) {
             Unit unit = (Unit) unitFc.getNewValue();
 
-            if(unit) {
+            if (unit) {
                 boolean wasNewlyCreatedUnit = wasUnitJustCreatedByPrean(unit);
                 log("wasNewlyCreatedUnit:$wasNewlyCreatedUnit");
                 if (wasNewlyCreatedUnit) {
@@ -194,9 +196,9 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
                     //prean.setGapptUnitFlexString02("YES");
                 }
                 //Logic to compare the unit booking and prean booking number vs prean eqo nbr
-                if(unit.getDepartureOrder()!= null && prean.getGapptOrder() != null){
-                    if(unit.getDepartureOrder().getEqboNbr().equalsIgnoreCase(prean.getGapptOrder().getEqboNbr())
-                            && !prean.getGapptOrder().getEqboNbr().equalsIgnoreCase(prean.getFieldString(_panFields.PREAN_EQO_NBR))){
+                if (unit.getDepartureOrder() != null && prean.getGapptOrder() != null) {
+                    if (unit.getDepartureOrder().getEqboNbr().equalsIgnoreCase(prean.getGapptOrder().getEqboNbr())
+                            && !prean.getGapptOrder().getEqboNbr().equalsIgnoreCase(prean.getFieldString(_panFields.PREAN_EQO_NBR))) {
                         inMoreFieldChanges.setFieldChange(_panFields.PREAN_EQO_NBR, prean.getGapptOrder().getEqboNbr())
                         inMoreFieldChanges.setFieldChange(RoadApptsField.GAPPT_NOTES, "REVALIDATE")
                     }
@@ -211,22 +213,20 @@ public class GateAppointmentInterceptor extends AbstractEntityLifecycleIntercept
         }
 
 
-        if (RAIL_ITT_GATE.equals(prean.getGate().getGateId())) {
-            FieldChange gapptBkg = (FieldChange) inOriginalFieldChanges.findFieldChange(RoadApptsField.GAPPT_ORDER);
-            if (gapptBkg != null && gapptBkg.getNewValue() != null) {
-                String preanEqoNbr = prean.getFieldValue(_panFields.PREAN_EQO_NBR);
-                EqBaseOrder eqbo = (EqBaseOrder)gapptBkg.getNewValue();
-                EquipmentOrder eqo = Booking.resolveEqoFromEqbo(eqbo)
-                Booking booking = Booking.resolveBkgFromEqo(eqo)
-                //WF#892222 Pradeep Arya - added null check for booking
-                if(preanEqoNbr != null && booking != null && !preanEqoNbr.equalsIgnoreCase(booking.getEqboNbr())){
-                    prean.setFieldValue(_panFields.PREAN_EQO_NBR, booking.getEqboNbr());
-                    prean.setFieldValue(_panFields.PREAN_STATUS, "OK")
-                    if (prean.getGapptUnit() != null) {
-                        UnitFacilityVisit ufv = prean.getGapptUnit().getUfvForFacilityLiveOnly(prean.getGapptGate().getGateFacility());
-                        if (ufv != null) {
-                            propagatePreanStatusToUfv(ufv, "OK", prean.isReceival());
-                        }
+        FieldChange gapptBkg = (FieldChange) inOriginalFieldChanges.findFieldChange(RoadApptsField.GAPPT_ORDER);
+        if (gapptBkg != null && gapptBkg.getNewValue() != null) {
+            String preanEqoNbr = prean.getFieldValue(_panFields.PREAN_EQO_NBR);
+            EqBaseOrder eqbo = (EqBaseOrder) gapptBkg.getNewValue();
+            EquipmentOrder eqo = Booking.resolveEqoFromEqbo(eqbo)
+            Booking booking = Booking.resolveBkgFromEqo(eqo)
+            //WF#892222 Pradeep Arya - added null check for booking
+            if (preanEqoNbr != null && booking != null && !preanEqoNbr.equalsIgnoreCase(booking.getEqboNbr())) {
+                prean.setFieldValue(_panFields.PREAN_EQO_NBR, booking.getEqboNbr());
+                prean.setFieldValue(_panFields.PREAN_STATUS, "OK")
+                if (prean.getGapptUnit() != null) {
+                    UnitFacilityVisit ufv = prean.getGapptUnit().getUfvForFacilityLiveOnly(prean.getGapptGate().getGateFacility());
+                    if (ufv != null) {
+                        propagatePreanStatusToUfv(ufv, "OK", prean.isReceival());
                     }
                 }
             }
